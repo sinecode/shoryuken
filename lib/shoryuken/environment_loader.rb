@@ -1,28 +1,61 @@
+# frozen_string_literal: true
+
 module Shoryuken
+  # Loads and configures the Shoryuken environment from configuration files
+  # and command line options. Handles Rails integration and queue setup.
   class EnvironmentLoader
+    # @return [Hash] the configuration options
     attr_reader :options
 
+    # Sets up a new EnvironmentLoader with the given options
+    #
+    # @param options [Hash] configuration options
+    # @option options [String] :config_file path to the configuration file
+    # @option options [Boolean] :rails whether to initialize Rails
+    # @option options [String] :logfile path to the log file
+    # @option options [Boolean] :verbose whether to enable verbose logging
+    # @option options [String] :require path to require workers from
+    # @option options [Integer] :concurrency number of concurrent workers
+    # @return [Shoryuken::EnvironmentLoader] the configured instance
     def self.setup_options(options)
       instance = new(options)
       instance.setup_options
       instance
     end
 
+    # Loads the environment for Rails console usage
+    #
+    # @return [void]
     def self.load_for_rails_console
       instance = setup_options(config_file: (Rails.root + 'config' + 'shoryuken.yml'))
       instance.load
     end
 
+    # Initializes a new EnvironmentLoader with the given options
+    #
+    # @param options [Hash] configuration options
+    # @option options [String] :config_file path to the configuration file
+    # @option options [Boolean] :rails whether to initialize Rails
+    # @option options [String] :logfile path to the log file
+    # @option options [Boolean] :verbose whether to enable verbose logging
+    # @option options [String] :require path to require workers from
+    # @option options [Integer] :concurrency number of concurrent workers
     def initialize(options)
       @options = options
     end
 
+    # Sets up configuration options from file and initializes components
+    #
+    # @return [void]
     def setup_options
       initialize_rails if load_rails?
       initialize_options
       initialize_logger
     end
 
+    # Loads the environment including queues and workers
+    #
+    # @return [void]
     def load
       prefix_active_job_queue_names
       parse_queues
@@ -33,28 +66,40 @@ module Shoryuken
 
     private
 
+    # Merges configuration file options with runtime options
+    #
+    # @return [void]
     def initialize_options
       Shoryuken.options.merge!(config_file_options)
       Shoryuken.options.merge!(options)
     end
 
+    # Reads and parses the configuration file
+    #
+    # @return [Hash] the parsed configuration options
     def config_file_options
       return {} unless (path = options[:config_file])
 
-      fail ArgumentError, "The supplied config file #{path} does not exist" unless File.exist?(path)
+      raise Errors::InvalidConfigurationError, "The supplied config file #{path} does not exist" unless File.exist?(path)
 
       if (result = YAML.load(ERB.new(IO.read(path)).result))
-        result.deep_symbolize_keys
+        Shoryuken::Helpers::HashUtils.deep_symbolize_keys(result)
       else
         {}
       end
     end
 
+    # Initializes the logger with file output and verbosity settings
+    #
+    # @return [void]
     def initialize_logger
       Shoryuken::Logging.initialize_logger(Shoryuken.options[:logfile]) if Shoryuken.options[:logfile]
       Shoryuken.logger.level = Logger::DEBUG if Shoryuken.options[:verbose]
     end
 
+    # Initializes the Rails environment
+    #
+    # @return [void]
     def initialize_rails
       # Adapted from: https://github.com/mperham/sidekiq/blob/master/lib/sidekiq/cli.rb
 
@@ -70,19 +115,34 @@ module Shoryuken
             ::Rails.application.config.eager_load = true
           end
         end
+        ::Rails::Application.initializer 'shoryuken.set_reloader_hook' do |app|
+          Shoryuken.reloader = proc do |&block|
+            app.reloader.wrap do
+              block.call
+            end
+          end
+        end
         if Shoryuken.active_job?
-          require 'shoryuken/extensions/active_job_extensions'
-          require 'shoryuken/extensions/active_job_adapter'
-          require 'shoryuken/extensions/active_job_concurrent_send_adapter'
+          require 'active_job/extensions'
+          require 'active_job/queue_adapters/shoryuken_adapter'
+          require 'active_job/queue_adapters/shoryuken_concurrent_send_adapter'
         end
         require File.expand_path('config/environment.rb')
       end
     end
 
+    # Checks if Rails should be loaded
+    #
+    # @return [Boolean] true if Rails should be initialized
     def load_rails?
       options[:rails]
     end
 
+    # Prefixes a queue name with ActiveJob queue name prefix
+    #
+    # @param queue_name [String] the queue name to prefix
+    # @param weight [Integer] the queue weight
+    # @return [Array<String, Integer>] the prefixed queue name and weight
     def prefix_active_job_queue_name(queue_name, weight)
       return [queue_name, weight] if queue_name.start_with?('https://', 'arn:')
 
@@ -95,6 +155,9 @@ module Shoryuken
       [prefixed_queue_name, weight]
     end
 
+    # Prefixes all queue names with ActiveJob prefix if enabled
+    #
+    # @return [void]
     def prefix_active_job_queue_names
       return unless Shoryuken.active_job?
       return unless Shoryuken.active_job_queue_name_prefixing?
@@ -114,10 +177,19 @@ module Shoryuken
       end
     end
 
+    # Parses a single queue and adds it to a group
+    #
+    # @param queue [String] the queue name
+    # @param weight [Integer] the queue weight
+    # @param group [String] the group name
+    # @return [void]
     def parse_queue(queue, weight, group)
       Shoryuken.add_queue(queue, [weight.to_i, 1].max, group)
     end
 
+    # Parses all queues from configuration and adds them to groups
+    #
+    # @return [void]
     def parse_queues
       if Shoryuken.options[:queues].to_a.any?
         Shoryuken.add_group('default', Shoryuken.options[:concurrency])
@@ -136,6 +208,9 @@ module Shoryuken
       end
     end
 
+    # Requires worker files from the configured path
+    #
+    # @return [void]
     def require_workers
       required = Shoryuken.options[:require]
 
@@ -148,17 +223,19 @@ module Shoryuken
       end
     end
 
+    # Validates that all configured queues exist in SQS
+    #
+    # @return [void]
+    # @raise [ArgumentError] if any queues do not exist
     def validate_queues
       return Shoryuken.logger.warn { 'No queues supplied' } if Shoryuken.ungrouped_queues.empty?
 
       non_existent_queues = []
 
       Shoryuken.ungrouped_queues.uniq.each do |queue|
-        begin
-          Shoryuken::Client.queues(queue)
-        rescue Aws::Errors::NoSuchEndpointError, Aws::SQS::Errors::NonExistentQueue
-          non_existent_queues << queue
-        end
+        Shoryuken::Client.queues(queue)
+      rescue Aws::Errors::NoSuchEndpointError, Aws::SQS::Errors::NonExistentQueue
+        non_existent_queues << queue
       end
 
       return if non_existent_queues.none?
@@ -171,12 +248,12 @@ module Shoryuken
         It's also possible that you don't have permission to access the specified queues.
       MSG
 
-      fail(
-        ArgumentError,
-        error_msg
-      )
+      raise Errors::QueueNotFoundError, error_msg
     end
 
+    # Validates that all queues have registered workers
+    #
+    # @return [void]
     def validate_workers
       return if Shoryuken.active_job?
 

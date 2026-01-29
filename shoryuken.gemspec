@@ -1,4 +1,3 @@
-
 lib = File.expand_path('lib', __dir__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'shoryuken/version'
@@ -9,7 +8,7 @@ Gem::Specification.new do |spec|
   spec.authors       = ['Pablo Cantero']
   spec.email         = ['pablo@pablocantero.com']
   spec.description = spec.summary = 'Shoryuken is a super efficient AWS SQS thread based message processor'
-  spec.homepage      = 'https://github.com/phstc/shoryuken'
+  spec.homepage      = 'https://github.com/ruby-shoryuken/shoryuken'
   spec.license       = 'LGPL-3.0'
 
   spec.files         = `git ls-files -z`.split("\x0")
@@ -17,11 +16,16 @@ Gem::Specification.new do |spec|
   spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
   spec.require_paths = ['lib']
 
-  spec.add_development_dependency 'dotenv'
-  spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'rspec'
-
-  spec.add_dependency 'aws-sdk-core', '>= 2'
+  spec.add_dependency 'aws-sdk-sqs', '>= 1.66.0'
   spec.add_dependency 'concurrent-ruby'
   spec.add_dependency 'thor'
+  spec.add_dependency 'zeitwerk', '~> 2.6'
+
+  spec.add_development_dependency 'dotenv'
+  spec.add_development_dependency 'ostruct'
+  spec.add_development_dependency 'rake'
+  spec.add_development_dependency 'rspec'
+  spec.add_development_dependency 'warning'
+
+  spec.required_ruby_version = '>= 3.2.0'
 end

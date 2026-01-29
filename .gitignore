@@ -26,3 +26,7 @@ shoryuken.yml
 .env
 rubocop.html
 .byebug_history
+.localstack
+spec/integration/**/Gemfile.lock
+spec/integration/**/vendor/
+spec/integration/**/.bundle/

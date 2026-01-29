@@ -1,29 +1,25 @@
-**I'm looking for Shoryuken maintainers, are you interested on helping to maintain Shoryuken? [Join our Slack](https://join.slack.com/t/shoryuken/shared_invite/zt-19xjq3iqc-KmoJ6eU6~qvZNqcLzIrjww)**
-
 # Shoryuken
-
-![Shoryuken](shoryuken.jpg)
 
 Shoryuken _sho-ryu-ken_ is a super-efficient [Amazon SQS](https://aws.amazon.com/sqs/) thread-based message processor.
 
 [![Build Status](https://github.com/ruby-shoryuken/shoryuken/workflows/Specs/badge.svg)](https://github.com/ruby-shoryuken/shoryuken/actions)
-[![Code Climate](https://codeclimate.com/github/phstc/shoryuken/badges/gpa.svg)](https://codeclimate.com/github/phstc/shoryuken)
+[![Join the chat at https://slack.shoryuken.io](https://raw.githubusercontent.com/karafka/misc/master/slack.svg)](https://slack.shoryuken.io)
 
 ## Key features
 
-- [Rails Active Job](https://github.com/phstc/shoryuken/wiki/Rails-Integration-Active-Job)
-- [Queue Load balancing](https://github.com/phstc/shoryuken/wiki/Shoryuken-options#load-balancing)
-- [Concurrency per queue](https://github.com/phstc/shoryuken/wiki/Processing-Groups)
-- [Long Polling](https://github.com/phstc/shoryuken/wiki/Long-Polling)
-- [Batch processing](https://github.com/phstc/shoryuken/wiki/Worker-options#batch)
-- [Auto extend visibility timeout](https://github.com/phstc/shoryuken/wiki/Worker-options#auto_visibility_timeout)
-- [Exponential backoff](https://github.com/phstc/shoryuken/wiki/Worker-options#retry_intervals)
-- [Middleware support](https://github.com/phstc/shoryuken/wiki/Middleware)
+- [Rails Active Job](https://github.com/ruby-shoryuken/shoryuken/wiki/Rails-Integration-Active-Job)
+- [Queue Load balancing](https://github.com/ruby-shoryuken/shoryuken/wiki/Shoryuken-options#load-balancing)
+- [Concurrency per queue](https://github.com/ruby-shoryuken/shoryuken/wiki/Processing-Groups)
+- [Long Polling](https://github.com/ruby-shoryuken/shoryuken/wiki/Long-Polling)
+- [Batch processing](https://github.com/ruby-shoryuken/shoryuken/wiki/Worker-options#batch)
+- [Auto extend visibility timeout](https://github.com/ruby-shoryuken/shoryuken/wiki/Worker-options#auto_visibility_timeout)
+- [Exponential backoff](https://github.com/ruby-shoryuken/shoryuken/wiki/Worker-options#retry_intervals)
+- [Middleware support](https://github.com/ruby-shoryuken/shoryuken/wiki/Middleware)
 - Amazon SQS CLI. See `shoryuken help sqs`
 
 ## Requirements
 
-Ruby 2.4 or greater.
+Ruby 3.0 or greater.
 
 ## Installation
 
@@ -33,14 +29,6 @@ Add this line to your application's Gemfile:
 gem 'shoryuken'
 ```
 
-If you are using AWS SDK version 3, please also add this line:
-
-```ruby
-gem 'aws-sdk-sqs'
-```
-
-The extra gem `aws-sdk-sqs` is required in order to keep Shoryuken compatible with AWS SDK version 2 and 3.
-
 And then execute:
 
 ```shell
@@ -49,11 +37,11 @@ $ bundle
 
 ## Usage
 
-Check the [Getting Started](https://github.com/phstc/shoryuken/wiki/Getting-Started) page.
+Check the [Getting Started](https://github.com/ruby-shoryuken/shoryuken/wiki/Getting-Started) page.
 
 ## More Information
 
-For more information check the [wiki page](https://github.com/phstc/shoryuken/wiki).
+For more information check the [wiki page](https://github.com/ruby-shoryuken/shoryuken/wiki).
 
 ## Credits
 
@@ -61,7 +49,7 @@ For more information check the [wiki page](https://github.com/phstc/shoryuken/wi
 
 ## Contributing
 
-1. Fork it ( https://github.com/phstc/shoryuken/fork )
+1. Fork it ( https://github.com/ruby-shoryuken/shoryuken/fork )
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
@@ -69,20 +57,33 @@ For more information check the [wiki page](https://github.com/phstc/shoryuken/wi
 
 ### Testing
 
-To run all unit specs against the latest dependency vesions, execute
+To run all unit specs against the latest dependency versions, execute
 
 ```sh
 bundle exec rake spec
 ```
 
-To run all Rails-related specs against all supported versions of Rails, execute
+To run integration specs (including Rails tests), start LocalStack and run:
 
 ```sh
-bundle exec appraisal rake spec:rails
+docker compose up -d
+bundle exec rake spec:integration
 ```
 
-To run integration specs, start a mock SQS server on `localhost:5000`. One such option is [cjlarose/moto-sqs-server](https://github.com/cjlarose/moto-sqs-server). Then execute
+### To release a new version
+
+Compare latest tag with HEAD:
 
 ```sh
-bundle exec rake spec:integration
+git log $(git describe --tags --abbrev=0)..HEAD --oneline
+```
+
+then update CHANGELOG.md.
+
+Update version in `lib/shoryuken/version.rb` with the appropriate version number [SEMVER](https://semver.org/).
+
+then run:
+
+```sh
+bundle exec rake release
 ```

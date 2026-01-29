@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
 module Shoryuken
-  VERSION = '6.0.0'.freeze
+  # Current version of the Shoryuken gem
+  VERSION = '7.0.0'
 end

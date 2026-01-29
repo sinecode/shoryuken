@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 $stdout.sync = true
 
 require 'singleton'
@@ -7,25 +9,32 @@ require 'erb'
 require 'shoryuken'
 
 module Shoryuken
-  # rubocop:disable Lint/InheritException
-  # See: https://github.com/mperham/sidekiq/blob/33f5d6b2b6c0dfaab11e5d39688cab7ebadc83ae/lib/sidekiq/cli.rb#L20
-  class Shutdown < Interrupt; end
-
+  # Runs the Shoryuken server process.
+  # Handles signal trapping, daemonization, and lifecycle management.
   class Runner
     include Util
     include Singleton
 
+    # @return [Shoryuken::Launcher, nil] the launcher instance, or nil if not yet initialized
+    attr_reader :launcher
+
+    # Runs the Shoryuken server with the given options
+    #
+    # @param options [Hash] runtime configuration options
+    # @option options [Boolean] :daemon whether to daemonize the process
+    # @option options [String] :pidfile path to the PID file
+    # @option options [String] :logfile path to the log file
+    # @option options [String] :config_file path to the configuration file
+    # @return [void]
     def run(options)
       self_read, self_write = IO.pipe
 
       %w[INT TERM USR1 TSTP TTIN].each do |sig|
-        begin
-          trap sig do
-            self_write.puts(sig)
-          end
-        rescue ArgumentError
-          puts "Signal #{sig} not supported"
+        trap sig do
+          self_write.puts(sig)
         end
+      rescue ArgumentError
+        puts "Signal #{sig} not supported"
       end
 
       loader = EnvironmentLoader.setup_options(options)
@@ -52,12 +61,18 @@ module Shoryuken
       end
     end
 
+    # Checks if the server is healthy
+    #
+    # @return [Boolean] true if the launcher is running and healthy
     def healthy?
       (@launcher && @launcher.healthy?) || false
     end
 
     private
 
+    # Initializes the Concurrent Ruby logger
+    #
+    # @return [void]
     def initialize_concurrent_logger
       return unless Shoryuken.logger
 
@@ -66,6 +81,12 @@ module Shoryuken
       end
     end
 
+    # Daemonizes the process
+    #
+    # @param options [Hash] options containing daemon and logfile settings
+    # @option options [Boolean] :daemon whether to daemonize
+    # @option options [String] :logfile path to the log file for daemon output
+    # @return [void]
     def daemonize(options)
       return unless options[:daemon]
 
@@ -77,11 +98,9 @@ module Shoryuken
       Process.daemon(true, true)
 
       files_to_reopen.each do |file|
-        begin
-          file.reopen file.path, 'a+'
-          file.sync = true
-        rescue ::Exception
-        end
+        file.reopen file.path, 'a+'
+        file.sync = true
+      rescue ::Exception
       end
 
       [$stdout, $stderr].each do |io|
@@ -93,25 +112,39 @@ module Shoryuken
       $stdin.reopen('/dev/null')
     end
 
+    # Writes the process ID to a file
+    #
+    # @param options [Hash] options containing the pidfile path
+    # @option options [String] :pidfile path to write the PID file
+    # @return [void]
     def write_pid(options)
       return unless (path = options[:pidfile])
 
       File.open(path, 'w') { |f| f.puts(Process.pid) }
     end
 
+    # Executes a soft shutdown on USR1 signal
+    #
+    # @return [void]
     def execute_soft_shutdown
-      logger.info { 'Received USR1, will soft shutdown down' }
+      logger.info { 'Received USR1, will soft shutdown' }
 
       @launcher.stop
       exit 0
     end
 
+    # Executes a terminal stop on TSTP signal
+    #
+    # @return [void]
     def execute_terminal_stop
       logger.info { 'Received TSTP, will stop accepting new work' }
 
       @launcher.stop
     end
 
+    # Prints backtraces of all threads
+    #
+    # @return [void]
     def print_threads_backtrace
       Thread.list.each do |thread|
         logger.info { "Thread TID-#{thread.object_id.to_s(36)} #{thread['label']}" }
@@ -123,6 +156,11 @@ module Shoryuken
       end
     end
 
+    # Handles incoming signals
+    #
+    # @param sig [String] the signal name
+    # @return [void]
+    # @raise [Interrupt] on TERM or INT signals
     def handle_signal(sig)
       logger.debug "Got #{sig} signal"
 
